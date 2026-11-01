@@ -1,0 +1,57 @@
+# Cost-capped, non-production Blueprint draft. Free Render Postgres expires
+# after 30 days; the free backend cannot use pre-deploy migrations or receive
+# private-network connections. Upgrade plans deliberately require owner review
+# before a usable staging or pilot deployment is created.
+services:
+  - type: web
+    name: shaha-finlease-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./service/Dockerfile
+    dockerContext: ./service
+    preDeployCommand: alembic upgrade head
+    healthCheckPath: /api/health/ready
+    autoDeployTrigger: off
+    numInstances: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shaha-finlease-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://shaha-finlease-web.onrender.com
+      - key: OUTBOUND_CALLING_ENABLED
+        value: "false"
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      # Configure these optional integration values in the Dashboard only
+      # after reviewing the assigned public service URL. Never put secrets here.
+
+  - type: web
+    name: shaha-finlease-web
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./voicebot/Dockerfile
+    dockerContext: ./voicebot
+    autoDeployTrigger: off
+    numInstances: 1
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://shaha-finlease-api.onrender.com/api
+
+databases:
+  - name: shaha-finlease-db
+    plan: free
+    region: singapore
+    databaseName: shaha_finlease
+    postgresMajorVersion: "16"
+    diskSizeGB: 1
+    ipAllowList: []

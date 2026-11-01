@@ -1,0 +1,32 @@
+# Voicebot assignment checklist
+
+**Updated:** 2026-11-01. The original assignment PDF was not present in the repository; this checklist uses the supplied master brief, prior audit, and current implementation. “Verified” means a check actually ran in this workspace. Browser/device audio remains unverified.
+
+| Requirement | Current status | Evidence / remaining limit |
+|---|---|---|
+| Ten fictional customers preserved; all six outcomes reproducible twice | **IMPLEMENTED AND VERIFIED** | The preserved SQL Server database has ten customers. The authenticated suite appended twelve calls, two per outcome; final SQL Server counts: right customer 6, wrong number 4, third party 2, callback 4, verification failed 4, not connected 4. |
+| Browser microphone permission, speech recognition, assistant response and audible synthesis | **IMPLEMENTED BUT NOT VERIFIED** | Call Console has a browser voice mode, local-only recognition requirement, `speechSynthesis`, visible states/errors, interruption/end, 15-second no-speech closure, and typed fallback. No actual microphone/browser session was run. |
+| English and Hindi voice selection and switching | **IMPLEMENTED BUT NOT VERIFIED** | `en-IN` and `hi-IN` language paths are present; the deterministic engine supports both. Recognition packs, pronunciation and recognition accuracy were not exercised. |
+| Conversational model | **BLOCKED BY MISSING CONFIGURATION** | Optional Gemini generic-small-talk adapter exists but defaults off and no key is configured. Deterministic rules remain active for verification, outcomes, privacy and protected requests. A real model response was not tested. |
+| Privacy before verification and for third parties | **IMPLEMENTED BUT NOT VERIFIED** | Browser verification answers are redacted before transcript persistence; no customer record or verification factor is passed to Gemini; fixed engine responses avoid financial disclosure. No live adversarial browser test was run. |
+| Correct and incorrect identity factors, retry limit and verification event reporting | **IMPLEMENTED AND VERIFIED** | SQL Server text fallback verified combined correct factors, a retry replay, answer redaction, one linked success event, completed call, and three-line summary. The twelve-call suite also persisted wrong-year failures; factor tests cover incorrect names and two-attempt limit. Events contain result/linkage, not submitted factors. |
+| Wrong number, third party with callback, third party without callback, DNC, silence | **IMPLEMENTED AND VERIFIED** | The SQL Server outcome suite persisted third-party callback/no-callback, wrong number and silence outcomes. DNC route behavior is covered by unit/API tests; no actual browser audio/silence timer run was made. |
+| Callback schedule persistence | **IMPLEMENTED AND VERIFIED** | SQL Server has two newly scheduled suite callbacks with time, timezone and reason, alongside two existing pending callbacks. Callback status history is retained; schedule validation and update paths are unit-tested. |
+| Six mutually exclusive call outcomes and terminal call status | **IMPLEMENTED AND VERIFIED** | SQL Server call outcomes are present for all six categories. Test coverage verifies connected outcomes become `completed` and `not_connected` becomes `failed`; final DB status totals include four failed calls. Busy/unavailable/unanswered reason codes are not distinct. |
+| Durable, auditable DNC and authorized release | **IMPLEMENTED BUT NOT VERIFIED** | Additive `DoNotCallEvent`, protected history/release APIs and UI reason form were added; ordinary edit cannot clear an active flag. Migration and live database behavior were not exercised. |
+| Outbound calling safeguards and exact 08:00–19:00 Asia/Kolkata boundary | **IMPLEMENTED AND VERIFIED** | Outbound remains disabled. Unit boundary tests cover 19:00:00 and sub-second/second times after the boundary. No calls are placed. |
+| SQL persistence, migrations, and existing database safety | **IMPLEMENTED AND VERIFIED** | SQL Server dialect is `mssql`; latest migration `0010_voice_turn_idempotency` is applied. Customer count remained 10; calls rose from 14 to 27 only through the authorized 12-call suite and one text simulation. No reset, reseed or volume removal occurred. |
+| Three-line summaries, transcript retention, callback and verification analytics | **IMPLEMENTED AND VERIFIED** | SQL Server contains 21 summaries and each stored summary has exactly three lines; 103 transcript rows, seven linked verification events, and callback rows (2 pending/2 scheduled). Dashboard/report outcome and verification metrics reconcile with SQL counts. |
+| Response latency measurement and under-three-second target | **PARTIALLY IMPLEMENTED** | Browser timestamps measure utterance-end to browser speech-synthesis-start and are stored with derived intervals; no real timing samples exist. Acoustic playback and the target are **NOT IMPLEMENTED / NOT VERIFIED** as a demonstrated result. |
+| Optional Twilio Relay and actual telephony | **BLOCKED BY MISSING CONFIGURATION** | Existing inbound adapter remains unconfigured. No public endpoint, real Twilio connection, outbound dialer, or real phone call was attempted. |
+| Authenticated browser and SQL Server end-to-end workflow | **PARTIALLY IMPLEMENTED** | Admin-authenticated SQL Server text-session, dashboard, report and CSV APIs were exercised directly. The signed-in browser UI and actual microphone/synthesis path were not manually exercised. |
+
+## Verification run in this implementation session
+
+- Backend: **138 passed**, one upstream Starlette/AnyIO deprecation warning. Ruff: **All checks passed**.
+- Frontend: `npm run lint`, `npx tsc --noEmit`, and `npm run build` passed.
+- No real microphone, audio fixture, Chrome speech pack, Gemini request, Twilio request, or latency sample was used.
+- Alembic source and applied SQL Server revision: `0010_voice_turn_idempotency`. SQL Server Compose services were started; backend readiness was `ready`, database `connected`, and frontend returned HTTP 200.
+- Final SQL Server check: 10 customers, 27 calls, 27 report/CSV rows, all six outcome counts reconciled, 21 three-line summaries, and four callback follow-ups (two pending/two scheduled).
+- `.env` was not edited or displayed. No volume reset, drop, truncate, or reseed was performed.
+- See [TEST_REPORT.md](TEST_REPORT.md), [DEMO_SCRIPT.md](DEMO_SCRIPT.md), and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for exact checks, demo sequence, and remaining limits.

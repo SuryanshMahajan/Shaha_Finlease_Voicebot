@@ -1,0 +1,10 @@
+FROM shaha_finlease-backend:latest
+WORKDIR /app
+COPY service/requirements-dev.txt ./requirements-dev.txt
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY service/app ./app
+COPY service/migrations ./migrations
+COPY service/tests ./tests
+COPY service/alembic.ini ./alembic.ini
+COPY data/example_customers.csv /data/example_customers.csv
+CMD ["python", "-m", "pytest", "-q"]
