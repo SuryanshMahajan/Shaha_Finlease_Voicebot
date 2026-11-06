@@ -101,6 +101,32 @@ _TEXT = {
 }
 
 
+# Alternate wordings for prompts that can be asked repeatedly; picked by turn number.
+_VARIANTS = {
+    "en": {
+        "verify": ["Sorry, I can only help with general questions here. For anything about your own account, I first need to confirm who you are with your name and birth year.",
+                   "I understand. To go further I do need the identity check: your full name and four-digit birth year. Or I can arrange a callback from a representative."],
+        "verify_prompt": ["Sorry, that did not match. Please try once more with your full name and four-digit birth year."],
+        "ask_name": ["Thanks. I still need your full name, please."],
+        "ask_year": ["Thanks. I still need your four-digit birth year, please."],
+        "reprompt": ["Sorry, I did not catch that. Could you say it again, please?",
+                     "I am still not sure I understood. Could you rephrase, or say 'representative' to speak to a person?"],
+        "greeting_ack": ["Hello! Am I speaking with the intended customer? If so, please say 'verify' to begin the identity check."],
+        "yes_ack": ["Thank you. Please say your full name and four-digit birth year for the identity check."],
+    },
+    "hi": {
+        "verify": ["क्षमा करें, यहाँ मैं केवल सामान्य जानकारी दे सकती हूँ। अपने खाते की जानकारी के लिए पहले नाम और जन्म-वर्ष से पहचान की पुष्टि ज़रूरी है।",
+                   "मैं समझती हूँ। आगे बढ़ने के लिए पहचान जाँच ज़रूरी है: आपका पूरा नाम और जन्म का चार अंकों वाला वर्ष। या मैं प्रतिनिधि से कॉलबैक की व्यवस्था कर सकती हूँ।"],
+        "verify_prompt": ["क्षमा करें, जानकारी मेल नहीं खाई। कृपया पूरा नाम और जन्म का चार अंकों वाला वर्ष एक बार फिर बताइए।"],
+        "ask_name": ["धन्यवाद। कृपया अपना पूरा नाम भी बताइए।"],
+        "ask_year": ["धन्यवाद। कृपया जन्म का चार अंकों वाला वर्ष भी बताइए।"],
+        "reprompt": ["क्षमा करें, मैं सुन नहीं पाई। क्या आप दोबारा बता सकते हैं?",
+                     "मैं अभी भी ठीक से समझ नहीं पाई। कृपया दूसरे शब्दों में कहें, या प्रतिनिधि से बात के लिए 'प्रतिनिधि' कहें।"],
+        "greeting_ack": ["नमस्ते! क्या मैं इच्छित ग्राहक से बात कर रही हूँ? यदि हाँ, तो पहचान जाँच शुरू करने के लिए 'पहचान' कहें।"],
+        "yes_ack": ["धन्यवाद। पहचान जाँच के लिए कृपया अपना पूरा नाम और जन्म का चार अंकों वाला वर्ष बताइए।"],
+    },
+}
+
 _DNC_HI = tuple(bytes.fromhex(value).decode("utf-8") for value in ('e0a4a6e0a58be0a4ace0a4bee0a4b0e0a4be20e0a4abe0a58be0a4a820e0a4aee0a4a4', 'e0a495e0a589e0a4b220e0a4aee0a4a420e0a495e0a4b0e0a4a8e0a4be', 'e0a4abe0a58be0a4a820e0a4aee0a4a420e0a495e0a4b0e0a4a8e0a4be', 'e0a4b8e0a482e0a4aae0a4b0e0a58de0a49520e0a4a820e0a495e0a4b0e0a587e0a482',))
 _HI_HI = tuple(bytes.fromhex(value).decode("utf-8") for value in ('e0a4b9e0a4bfe0a482e0a4a6e0a580', 'e0a4b9e0a4bfe0a4a8e0a58de0a4a6e0a580',))
 _WRONG_HI = tuple(bytes.fromhex(value).decode("utf-8") for value in ('e0a497e0a4b2e0a4a420e0a4a8e0a482e0a4ace0a4b0', 'e0a497e0a4b2e0a4a420e0a4a8e0a4aee0a58de0a4ace0a4b0', 'e0a4aee0a581e0a49de0a58720e0a4a8e0a4b9e0a580e0a48220e0a49ce0a4bee0a4a8e0a4a4e0a587',))
@@ -139,32 +165,50 @@ def extract_verification_factors(text: str, *, allow_bare_name: bool = False) ->
     return name, year, name is not None or year is not None
 
 
+def _has(value: str, terms: tuple[str, ...]) -> bool:
+    """Whole-word match for ASCII terms (so 'later' != 'plate'); substring for Hindi."""
+    return any(
+        (t in value) if not t.isascii() else re.search(rf"(?<![a-z']){re.escape(t)}(?![a-z'])", value)
+        for t in terms
+    )
+
+
+_GREETINGS = {"hi", "hello", "hey", "namaste", "\u0928\u092e\u0938\u094d\u0924\u0947"}
+_YES = {"yes", "yeah", "yep", "speaking", "this is me", "that is me", "haan", "ha", "\u0939\u093e\u0901", "\u0939\u093e\u0902", "\u091c\u0940 \u0939\u093e\u0901", "\u091c\u0940"}
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"[.!?,;:]", "", unicodedata.normalize("NFKC", text).casefold()).strip()
+
+
 def detect_intent(text: str) -> Intent:
     """Small deterministic bilingual intent matcher; user text is never policy."""
     value = unicodedata.normalize("NFKC", text).casefold().strip()
     if not value:
         return "uncertain"
-    if any(term in value for term in ("don't call", "do not call", "stop calling", "remove my number", "do not contact", *_DNC_HI)):
+    if _has(value, ("don't call", "do not call", "stop calling", "remove my number", "do not contact", *_DNC_HI)):
         return "do_not_call"
-    if any(term in value for term in ("hindi", *_HI_HI)):
+    if _has(value, ("hindi", *_HI_HI)):
         return "language_hindi"
-    if any(term in value for term in ("english",)):
+    if _has(value, ("english",)):
         return "language_english"
-    if any(term in value for term in ("wrong number", "not the customer", "don't know them", "do not know them", *_WRONG_HI)):
+    if _has(value, ("wrong number", "not the customer", "don't know them", "do not know them", *_WRONG_HI)):
         return "wrong_number"
-    if any(term in value for term in ("someone else", "third party", "relative", "family member", *_THIRD_HI)):
+    if _has(value, ("someone else", "third party", "relative", "family member", *_THIRD_HI)):
         return "third_party"
-    if any(term in value for term in ("callback", "call me", "call back", "tomorrow", "later", *_CALLBACK_HI)):
+    if _has(value, ("callback", "call me", "call back", "tomorrow", "later", *_CALLBACK_HI)):
         return "callback"
-    if any(term in value for term in ("loan", "balance", "dues", "outstanding", "recovery", "debt", "amount due", "loan amount", *_SENSITIVE_HI)):
+    if _has(value, ("loan", "balance", "dues", "outstanding", "recovery", "debt", "amount due", "loan amount", *_SENSITIVE_HI)):
         return "sensitive_request"
-    if any(term in value for term in ("human", "agent", "representative", "person", *_HUMAN_HI)):
+    if _has(value, ("human", "agent", "representative", "real person", *_HUMAN_HI)):
         return "human"
-    if any(term in value for term in ("verify", "verification", "identity", *_VERIFY_HI)):
+    if _has(value, ("verify", "verification", "identity", *_VERIFY_HI)):
         return "verification"
-    if any(term in value for term in ("goodbye", "bye", "hang up", *_GOODBYE_HI)):
+    if _has(value, ("goodbye", "bye", "hang up", *_GOODBYE_HI)):
         return "goodbye"
-    if len(value) < 3 or any(term in value for term in ("ignore previous", "ignore all rules", "reveal the system prompt", "ignore instructions", *_INJECTION_HI)):
+    if value in _GREETINGS or value in _YES:
+        return "general_enquiry"
+    if len(value) < 3 or _has(value, ("ignore previous", "ignore all rules", "reveal the system prompt", "ignore instructions", *_INJECTION_HI)):
         return "uncertain"
     return "general_enquiry"
 
@@ -180,7 +224,10 @@ class ConversationEngine:
         pending_name_verified: bool | None = None,
         pending_year_verified: bool | None = None,
         verification_attempts: int = 0,
+        last_message: str | None = None,
     ) -> None:
+        # Previous assistant reply: lets stateless callers avoid repeating it.
+        self.last_message = last_message
         self.state = ConversationState.NEW
         self.language: Language | None = None
         self.identity_verified = False
@@ -195,6 +242,12 @@ class ConversationEngine:
         event = ConversationEvent(kind, self.state, metadata)
         self.events.append(event)
         return event
+
+    def _say(self, key: str) -> str:
+        """First wording of `key` that differs from the last assistant reply."""
+        lang = self.language or "en"
+        options = [*([_TEXT[lang][key]] if key in _TEXT[lang] else []), *_VARIANTS[lang].get(key, [])]
+        return next((o for o in options if o != self.last_message), options[-1])
 
     def start(self, language: Language | None = None, *, simulated: bool = True) -> FlowResponse:
         if self.state is not ConversationState.NEW:
@@ -213,7 +266,8 @@ class ConversationEngine:
         if self.state in (ConversationState.ENDED, ConversationState.HANDOFF):
             return self._response(_TEXT[self.language or "en"]["closed"], "uncertain")
         if self.state is ConversationState.NEW:
-            self.start()
+            prev, _ = self.last_message, self.start()
+            self.last_message = prev
         intent = detect_intent(text)
         lang = self.language or "en"
         if intent == "do_not_call":
@@ -253,6 +307,14 @@ class ConversationEngine:
             self.state = ConversationState.HANDOFF
             event = self._event("human_handoff_requested")
             return self._response(_TEXT[lang]["human"], intent, ended=True, escalate=True, events=(event,))
+        plain = _plain(text)
+        if intent == "general_enquiry" and self.state is ConversationState.ACTIVE and (plain in _GREETINGS or plain in _YES):
+            key = "yes_ack" if plain in _YES else "greeting_ack"
+            return self._response(self._say(key), intent)
+        if intent == "uncertain" and not _has(unicodedata.normalize("NFKC", text).casefold(), ("ignore", *_INJECTION_HI)) \
+                and self.last_message not in _VARIANTS[lang]["reprompt"] and self.state is not ConversationState.VERIFYING:
+            # First unclear utterance: ask again instead of ending the call.
+            return self._response(_VARIANTS[lang]["reprompt"][0], intent)
         if intent in ("uncertain", "sensitive_request"):
             self.state = ConversationState.HANDOFF
             key = "sensitive" if intent == "sensitive_request" else "uncertain"
@@ -278,11 +340,11 @@ class ConversationEngine:
             if self.pending_name_verified is not None and self.pending_year_verified is not None:
                 return self.submit_verification_result(self.pending_name_verified and self.pending_year_verified)
             if name is None and year is None:
-                prompt = _TEXT[lang]["verify_prompt"]
+                prompt = self._say("verify_prompt")
             elif name is None:
-                prompt = _TEXT[lang]["ask_name"]
+                prompt = self._say("ask_name")
             else:
-                prompt = _TEXT[lang]["ask_year"]
+                prompt = self._say("ask_year")
             return self._response(prompt, "verification", events=(event,) if event else ())
         # General enquiry: do not answer customer-specific requests here, even
         # after verification; no financial disclosure capability exists.
@@ -291,7 +353,7 @@ class ConversationEngine:
             event = self._event("human_handoff_requested", reason="customer_specific_help")
             return self._response(_TEXT[lang]["verified"], "general_enquiry", ended=True, escalate=True, events=(event,))
         event = self._event("verification_required")
-        return self._response(_TEXT[lang]["verify"], "general_enquiry", events=(event,))
+        return self._response(self._say("verify"), "general_enquiry", events=(event,))
 
     def submit_verification(self, display_name: str, birth_year: str) -> FlowResponse:
         if self.state is not ConversationState.VERIFYING:
@@ -323,7 +385,7 @@ class ConversationEngine:
             self.pending_name_verified = None
             self.pending_year_verified = None
             event = self._event("identity_verification", verified=False)
-            return self._response(_TEXT[lang]["verify_prompt"], "verification", events=(event,))
+            return self._response(self._say("verify_prompt"), "verification", events=(event,))
         self.state = ConversationState.ENDED
         self.pending_name_verified = None
         self.pending_year_verified = None
@@ -345,6 +407,7 @@ class ConversationEngine:
         escalate: bool = False,
         events: tuple[ConversationEvent, ...] = (),
     ) -> FlowResponse:
+        self.last_message = message
         return FlowResponse(message, outcome, ended, escalate, self.state, self.language or "en", intent, events)
 
 

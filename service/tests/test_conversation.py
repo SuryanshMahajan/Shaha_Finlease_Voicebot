@@ -168,3 +168,30 @@ def test_callback_has_structured_handoff_outcome_and_ended_state():
     assert result.outcome is CallOutcome.callback_requested
     assert result.state is ConversationState.ENDED
     assert result.events[0].metadata == {"outcome": "callback_requested"}
+
+
+def test_repeated_enquiries_never_repeat_the_same_reply():
+    engine = ConversationEngine()
+    engine.start("en")
+    replies = [engine.handle("what are your office hours").message for _ in range(3)]
+    assert all(a != b for a, b in zip(replies, replies[1:]))
+    # stateless callers (browser voice) pass the previous reply back in
+    again = ConversationEngine(last_message=replies[-1], ).handle("what are your office hours")
+    assert again.message != replies[-1]
+
+
+def test_unclear_input_gets_one_reprompt_before_handoff():
+    engine = ConversationEngine()
+    engine.start("en")
+    first = engine.handle("hm")
+    assert not first.ended and not first.escalate_to_human
+    assert engine.handle("hm").escalate_to_human
+
+
+def test_greeting_and_yes_move_the_call_forward_and_words_match_whole():
+    engine = ConversationEngine()
+    engine.start("en")
+    assert not engine.handle("hello").ended
+    assert "birth year" in engine.handle("yes").message
+    assert detect_intent("the plate is nice") == "general_enquiry"  # 'later' substring regression
+    assert detect_intent("is another person there") == "general_enquiry"

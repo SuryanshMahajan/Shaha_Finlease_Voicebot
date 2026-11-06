@@ -113,6 +113,7 @@ def test_detected_language_and_unclear_input_are_handled_without_model_output():
     assert primary_tag.messages[0]["type"] == "language"
     assert primary_tag.messages[-1]["lang"] == "hi-IN"
 
+    assert session.handle({"type": "prompt", "voicePrompt": "?", "lang": "hi-IN", "last": True}).terminal_reason is None
     unclear = session.handle({"type": "prompt", "voicePrompt": "?", "lang": "hi-IN", "last": True})
     assert unclear.terminal_reason == "uncertain"
     assert json.loads(unclear.messages[0]["handoffData"])["reason"] == "uncertain"

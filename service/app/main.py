@@ -563,9 +563,13 @@ def voice_session_turn(call_id: uuid.UUID, payload: VoiceTurnInput, request: Req
     was_verifying = call.voice_state == "verifying"
     was_callback_offered = call.voice_state == "callback_offered"
     _, _, has_verification_factors = extract_verification_factors(payload.text.strip(), allow_bare_name=was_verifying)
+    last_message = db.scalar(select(TranscriptMessage.content).where(
+        TranscriptMessage.call_id == call.id, TranscriptMessage.speaker == "assistant",
+    ).order_by(TranscriptMessage.created_at.desc()).limit(1))
     engine = ConversationEngine(
         verify,
         factor_verifier=verify_factors,
+        last_message=last_message,
         pending_name_verified=call.verification_name_match,
         pending_year_verified=call.verification_year_match,
         verification_attempts=call.verification_attempts,
