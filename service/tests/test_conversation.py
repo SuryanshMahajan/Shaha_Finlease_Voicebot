@@ -195,3 +195,27 @@ def test_greeting_and_yes_move_the_call_forward_and_words_match_whole():
     assert "birth year" in engine.handle("yes").message
     assert detect_intent("the plate is nice") == "general_enquiry"  # 'later' substring regression
     assert detect_intent("is another person there") == "general_enquiry"
+
+
+@pytest.mark.parametrize("text,intent", [
+    ("who are you", "identity_question"), ("is this a scam", "identity_question"), ("thanks", "acknowledge"),
+    ("आप कौन बोल रहे हैं", "identity_question"), ("धन्यवाद", "acknowledge"), ("repeat that", "repeat"),
+    ("I'll pay next week", "sensitive_request"), ("not interested", "goodbye"), ("I'm busy", "callback"),
+    ("let me talk to your manager", "human"),
+])
+def test_common_caller_phrases_get_specific_intents(text, intent):
+    assert detect_intent(text) == intent
+
+
+def test_i_am_busy_or_the_customer_is_not_taken_as_a_name():
+    engine = ConversationEngine()
+    engine.start("en")
+    reply = engine.handle("I am the customer")
+    assert engine.state is ConversationState.ACTIVE and "birth year" in reply.message
+
+
+def test_no_to_intended_customer_offers_callback_and_repeat_replays_last_reply():
+    engine = ConversationEngine()
+    greeting = engine.start("en").message
+    assert engine.handle("repeat that").message.endswith(greeting)
+    assert engine.handle("no").state is ConversationState.CALLBACK_OFFERED

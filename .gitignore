@@ -15,4 +15,5 @@ coverage/
 *.log
 data/*
 !data/README.md
+!data/example_customers.csv
 

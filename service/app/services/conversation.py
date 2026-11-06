@@ -16,7 +16,7 @@ Language = Literal["hi", "en"]
 Intent = Literal[
     "general_enquiry", "wrong_number", "third_party", "callback", "human",
     "verification", "sensitive_request", "language_hindi", "language_english",
-    "goodbye", "uncertain", "do_not_call",
+    "goodbye", "uncertain", "do_not_call", "identity_question", "acknowledge", "repeat",
 ]
 
 
@@ -113,6 +113,12 @@ _VARIANTS = {
                      "I am still not sure I understood. Could you rephrase, or say 'representative' to speak to a person?"],
         "greeting_ack": ["Hello! Am I speaking with the intended customer? If so, please say 'verify' to begin the identity check."],
         "yes_ack": ["Thank you. Please say your full name and four-digit birth year for the identity check."],
+        "who": ["I am Shaha Finlease's automated assistant. I can answer general questions and connect you to an authorized representative. To discuss anything about your own account, I first need to verify you: just say 'verify'.",
+                "As I said, I am an automated assistant from Shaha Finlease, and this is a legitimate simulated call. Say 'verify' to start the identity check, or 'representative' to speak to a person."],
+        "ack": ["Thank you. Whenever you are ready, say 'verify' to begin the identity check, or ask for a representative.",
+                "Alright. Shall we begin the identity check? Please say 'verify', or 'representative' to reach a person."],
+        "hear": ["Yes, I can hear you clearly. Please go ahead."],
+        "notinterested": ["Understood, I will not take more of your time. Thank you, goodbye."],
     },
     "hi": {
         "verify": ["क्षमा करें, यहाँ मैं केवल सामान्य जानकारी दे सकती हूँ। अपने खाते की जानकारी के लिए पहले नाम और जन्म-वर्ष से पहचान की पुष्टि ज़रूरी है।",
@@ -124,6 +130,12 @@ _VARIANTS = {
                      "मैं अभी भी ठीक से समझ नहीं पाई। कृपया दूसरे शब्दों में कहें, या प्रतिनिधि से बात के लिए 'प्रतिनिधि' कहें।"],
         "greeting_ack": ["नमस्ते! क्या मैं इच्छित ग्राहक से बात कर रही हूँ? यदि हाँ, तो पहचान जाँच शुरू करने के लिए 'पहचान' कहें।"],
         "yes_ack": ["धन्यवाद। पहचान जाँच के लिए कृपया अपना पूरा नाम और जन्म का चार अंकों वाला वर्ष बताइए।"],
+        "who": ["मैं शाहा फिनलीज़ की स्वचालित सहायक हूँ। मैं सामान्य प्रश्नों के उत्तर दे सकती हूँ और अधिकृत प्रतिनिधि से जोड़ सकती हूँ। अपने खाते से जुड़ी बात के लिए पहले पहचान जाँच ज़रूरी है: बस 'पहचान' कहें।",
+                "जैसा मैंने बताया, मैं शाहा फिनलीज़ की स्वचालित सहायक हूँ और यह एक वैध सिमुलेटेड कॉल है। पहचान जाँच के लिए 'पहचान' कहें, या व्यक्ति से बात के लिए 'प्रतिनिधि' कहें।"],
+        "ack": ["धन्यवाद। जब आप तैयार हों, पहचान जाँच शुरू करने के लिए 'पहचान' कहें, या प्रतिनिधि मांगें।",
+                "ठीक है। क्या हम पहचान जाँच शुरू करें? कृपया 'पहचान' कहें, या व्यक्ति से बात के लिए 'प्रतिनिधि' कहें।"],
+        "hear": ["जी हाँ, मुझे आपकी आवाज़ साफ़ सुनाई दे रही है। कृपया बोलिए।"],
+        "notinterested": ["समझ गई, मैं आपका और समय नहीं लूँगी। धन्यवाद, नमस्ते।"],
     },
 }
 
@@ -156,7 +168,9 @@ def extract_verification_factors(text: str, *, allow_bare_name: bool = False) ->
         name = _NAME_PREFIX.sub("", candidate).strip(" ,.;:-") or None
     else:
         candidate = _NAME_PREFIX.sub("", value).strip(" ,.;:-")
-        if candidate != value.strip(" ,.;:-"):
+        # Outside the identity check, "I am busy" / "this is X" is not a name.
+        weak = re.match(r"^(?:i\s+am|i'm|this\s+is)\b", value, re.I) and not allow_bare_name
+        if candidate != value.strip(" ,.;:-") and not weak:
             name = candidate or None
         elif allow_bare_name and value.casefold() not in {
             "verify", "verify me", "verification", "identity", "yes", "no", "hello", "hi",
@@ -173,8 +187,9 @@ def _has(value: str, terms: tuple[str, ...]) -> bool:
     )
 
 
+_ACK = {"ok", "okay", "alright", "fine", "thanks", "thank you", "i see", "hmm", "right", "got it", "\u0920\u0940\u0915 \u0939\u0948", "\u0927\u0928\u094d\u092f\u0935\u093e\u0926", "\u0936\u0941\u0915\u094d\u0930\u093f\u092f\u093e", "\u0905\u091a\u094d\u091b\u093e"}
 _GREETINGS = {"hi", "hello", "hey", "namaste", "\u0928\u092e\u0938\u094d\u0924\u0947"}
-_YES = {"yes", "yeah", "yep", "speaking", "this is me", "that is me", "haan", "ha", "\u0939\u093e\u0901", "\u0939\u093e\u0902", "\u091c\u0940 \u0939\u093e\u0901", "\u091c\u0940"}
+_YES = {"yes", "yeah", "yep", "speaking", "this is me", "that is me", "haan", "ha", "haan boliye", "\u092e\u0948\u0902 \u0917\u094d\u0930\u093e\u0939\u0915 \u0939\u0942\u0901", "\u092e\u0948\u0902 \u0917\u094d\u0930\u093e\u0939\u0915 \u0939\u0942\u0902", "i am the customer", "i'm the customer", "yes speaking", "\u0939\u093e\u0901 \u092c\u094b\u0932\u093f\u090f", "\u0939\u093e\u0901 \u092c\u094b\u0932\u093f\u090f", "\u0939\u093e\u0901", "\u0939\u093e\u0902", "\u091c\u0940 \u0939\u093e\u0901", "\u091c\u0940"}
 
 
 def _plain(text: str) -> str:
@@ -192,22 +207,28 @@ def detect_intent(text: str) -> Intent:
         return "language_hindi"
     if _has(value, ("english",)):
         return "language_english"
+    if _has(value, ("not interested", "don't want to talk", "do not want to talk", "no thanks", "no thank you", "\u092e\u0941\u091d\u0947 \u0930\u0941\u091a\u093f \u0928\u0939\u0940\u0902", "\u0928\u0939\u0940\u0902 \u091a\u093e\u0939\u093f\u090f")):
+        return "goodbye"
     if _has(value, ("wrong number", "not the customer", "don't know them", "do not know them", *_WRONG_HI)):
         return "wrong_number"
-    if _has(value, ("someone else", "third party", "relative", "family member", *_THIRD_HI)):
+    if _has(value, ("someone else", "third party", "relative", "family member", "not me", "it's not me", "its not me", "he is not here", "she is not here", *_THIRD_HI)):
         return "third_party"
-    if _has(value, ("callback", "call me", "call back", "tomorrow", "later", *_CALLBACK_HI)):
+    if _has(value, ("callback", "call me", "call back", "tomorrow", "later", "busy", "not a good time", "bad time", *_CALLBACK_HI)):
         return "callback"
-    if _has(value, ("loan", "balance", "dues", "outstanding", "recovery", "debt", "amount due", "loan amount", *_SENSITIVE_HI)):
+    if _has(value, ("loan", "balance", "dues", "outstanding", "recovery", "debt", "amount due", "loan amount", "pay", "payment", "emi", "interest", "installment", "settlement", "penalty", *_SENSITIVE_HI)):
         return "sensitive_request"
-    if _has(value, ("human", "agent", "representative", "real person", *_HUMAN_HI)):
+    if _has(value, ("human", "agent", "representative", "real person", "manager", "supervisor", "\u092e\u0948\u0928\u0947\u091c\u0930", "\u092a\u094d\u0930\u0924\u093f\u0928\u093f\u0927\u093f", *_HUMAN_HI)):
         return "human"
     if _has(value, ("verify", "verification", "identity", *_VERIFY_HI)):
         return "verification"
     if _has(value, ("goodbye", "bye", "hang up", *_GOODBYE_HI)):
         return "goodbye"
-    if value in _GREETINGS or value in _YES:
-        return "general_enquiry"
+    if _has(value, ("repeat", "say that again", "come again", "once more", "sorry what", "pardon", "\u0926\u094b\u092c\u093e\u0930\u093e", "\u092b\u093f\u0930 \u0938\u0947 \u092c\u094b\u0932\u093f\u090f")):
+        return "repeat"
+    if _has(value, ("who are you", "who is this", "who is calling", "who's calling", "what is this call", "why are you calling", "is this a scam", "is this real", "is this fake", "what can you do", "help", "can you hear me", "\u0906\u092a \u0915\u094c\u0928", "\u0915\u094d\u092f\u094b\u0902 \u092b\u094b\u0928", "\u0915\u093f\u0938\u0932\u093f\u090f \u0915\u0949\u0932")):
+        return "identity_question"
+    if value.strip(".!?, ") in _ACK or value.strip(".!?, ") in _YES or value in _GREETINGS:
+        return "general_enquiry" if value.strip(".!?, ") in _GREETINGS or value.strip(".!?, ") in _YES else "acknowledge"
     if len(value) < 3 or _has(value, ("ignore previous", "ignore all rules", "reveal the system prompt", "ignore instructions", *_INJECTION_HI)):
         return "uncertain"
     return "general_enquiry"
@@ -290,10 +311,17 @@ class ConversationEngine:
             return self._switch_language("hi", intent)
         if intent == "language_english":
             return self._switch_language("en", intent)
+        if self.state is ConversationState.ACTIVE and _plain(text) in {"no", "nope", "nahi", "नहीं", "नही"}:
+            intent = "third_party"  # 'No' to "may I speak with the customer?"
         if intent == "third_party":
             self.state = ConversationState.CALLBACK_OFFERED
             event = self._event("third_party_callback_offered")
             return self._response(_TEXT[lang]["third_party"], intent, events=(event,))
+        if intent == "goodbye" and any(t in _plain(text) for t in ("interested", "want to talk", "no thank", "रुचि", "नहीं चाहिए")):
+            self.state = ConversationState.ENDED
+            outcome = CallOutcome.not_connected
+            event = self._event("conversation_ended", outcome=outcome.value)
+            return self._response(self._say("notinterested"), intent, outcome=outcome, ended=True, events=(event,))
         if intent in ("wrong_number", "callback", "goodbye"):
             key, outcome = {
                 "wrong_number": ("wrong", CallOutcome.wrong_number),
@@ -308,6 +336,15 @@ class ConversationEngine:
             event = self._event("human_handoff_requested")
             return self._response(_TEXT[lang]["human"], intent, ended=True, escalate=True, events=(event,))
         plain = _plain(text)
+        active = self.state is ConversationState.ACTIVE
+        if intent == "repeat" and self.last_message:
+            prefix = "ज़रूर। " if lang == "hi" else "Sure. "
+            return self._response(prefix + self.last_message.removeprefix(prefix), intent)
+        if intent == "identity_question" and active:
+            key = "hear" if "hear" in plain else "who"
+            return self._response(self._say(key), intent)
+        if intent == "acknowledge" and active:
+            return self._response(self._say("ack"), intent)
         if intent == "general_enquiry" and self.state is ConversationState.ACTIVE and (plain in _GREETINGS or plain in _YES):
             key = "yes_ack" if plain in _YES else "greeting_ack"
             return self._response(self._say(key), intent)

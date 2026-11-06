@@ -1,0 +1,11 @@
+customer_ref,display_name,birth_year,phone,preferred_language,do_not_call
+DEMO-0001,Demo Customer One,1978,+91 90000 00001,en,false
+DEMO-0002,Demo Customer Two,1983,+91 90000 00002,hi,false
+DEMO-0003,Demo Customer Three,1986,+91 90000 00003,en,false
+DEMO-0004,Demo Customer Four,1975,+91 90000 00004,hi,false
+DEMO-0005,Demo Customer Five,1990,+91 90000 00005,en,false
+DEMO-0006,Demo Customer Six,1981,+91 90000 00006,hi,false
+DEMO-0007,Demo Customer Seven,1992,+91 90000 00007,en,false
+DEMO-0008,Demo Customer Eight,1988,+91 90000 00008,hi,false
+DEMO-0009,Demo Customer Nine,1979,+91 90000 00009,en,false
+DEMO-0010,Demo Customer Ten,1985,+91 90000 00010,hi,true
